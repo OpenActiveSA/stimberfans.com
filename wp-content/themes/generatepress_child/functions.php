@@ -377,26 +377,43 @@ function gp_child_enqueue_open_mini_cart_script() {
 
 	$js = <<<'JS'
 (function ($) {
-	function visibleMiniCartButton() {
-		var buttons = document.querySelectorAll('.wc-block-mini-cart__button');
-		for (var i = 0; i < buttons.length; i++) {
-			if (buttons[i].offsetParent !== null) {
-				return buttons[i];
+	function findVisibleMiniCart() {
+		var carts = document.querySelectorAll('.wc-block-mini-cart');
+		for (var i = 0; i < carts.length; i++) {
+			var btn = carts[i].querySelector('.wc-block-mini-cart__button');
+			if (btn && btn.offsetParent !== null) {
+				return carts[i];
 			}
 		}
-		return buttons[0] || null;
+		return carts[0] || null;
 	}
 
+	/**
+	 * Open the drawer the same way WooCommerce mini-cart-frontend.js does.
+	 * A bare button.click() only shows the empty overlay.
+	 */
 	function openMiniCart() {
-		var btn = visibleMiniCartButton();
-		if (btn) {
-			btn.click();
+		var cart = findVisibleMiniCart();
+		if (!cart) {
+			return;
 		}
+		var overlay = cart.querySelector('.wc-block-components-drawer__screen-overlay');
+		if (!overlay) {
+			return;
+		}
+
+		// Lazy-load mini-cart contents packages (WC listens for this on first open).
+		document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
+
+		cart.dataset.isInitiallyOpen = 'true';
+		overlay.classList.add('wc-block-components-drawer__screen-overlay--with-slide-in');
+		overlay.classList.remove('wc-block-components-drawer__screen-overlay--is-hidden');
 	}
 
 	// Notice "View cart" → open drawer instead of /cart/.
 	$(document).on('click', '.woocommerce-message a.button.wc-forward, .woocommerce-message a.wc-forward', function (e) {
 		e.preventDefault();
+		e.stopPropagation();
 		$(this).closest('.woocommerce-message').remove();
 		openMiniCart();
 	});

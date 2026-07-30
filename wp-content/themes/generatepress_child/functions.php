@@ -352,3 +352,177 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
     add_action( 'template_redirect', 'show_maintenance_page', 1 );
 }
 
+/**
+ * ---------------------------------------------------------------------------
+ * Front-end performance: dequeue assets that are not needed on the current page.
+ *
+ * Keeps WooCommerce Blocks mini-cart (header cart) everywhere.
+ * Strips shipping / variation / addons / quote scripts off pages that only
+ * display products (e.g. homepage carousels with no Add to cart).
+ * ---------------------------------------------------------------------------
+ */
+add_action( 'wp_enqueue_scripts', 'gp_child_dequeue_unused_assets', 99999 );
+add_action( 'wp_print_scripts', 'gp_child_dequeue_unused_assets', 99999 );
+add_action( 'wp_print_styles', 'gp_child_dequeue_unused_assets', 99999 );
+
+function gp_child_dequeue_unused_assets() {
+	if ( is_admin() ) {
+		return;
+	}
+
+	$is_cart_checkout = function_exists( 'is_cart' ) && ( is_cart() || is_checkout() || is_account_page() );
+	$is_product       = function_exists( 'is_product' ) && is_product();
+	$is_catalog       = function_exists( 'is_shop' ) && (
+		is_shop() || is_product_taxonomy() || is_product_category() || is_product_tag()
+	);
+
+	// Shipping / checkout plugins: only on cart, checkout, account.
+	if ( ! $is_cart_checkout ) {
+		gp_child_dequeue_handles(
+			array(
+				// The Courier Guy
+				'the-courier-guy',
+				'the-courier-guy-main',
+				'the-courier-guy-notice',
+				'tcg-main',
+				'tcg-notice',
+				// ELEX DHL Express
+				'elex-dhl-express',
+				'dhl_cart_checkout_scripts',
+				'elex-woo-dhl-express-shipping',
+				// Datepicker often pulled in for shipping rate forms
+				'jquery-ui-datepicker',
+			),
+			array(
+				// Styles
+				'the-courier-guy',
+				'tcg-main',
+				'elex-woo-dhl-express-shipping',
+			)
+		);
+
+		gp_child_dequeue_by_src_contains(
+			array(
+				'/the-courier-guy/',
+				'/elex-woo-dhl-express-shipping/',
+				'/woocommerce-dhlexpress-services/',
+			)
+		);
+	}
+
+	// Single-product / quote tooling: not needed on homepage carousels.
+	if ( ! $is_product ) {
+		gp_child_dequeue_handles(
+			array(
+				'wc-add-to-cart-variation',
+				'woocommerce-add-to-cart-variation',
+				'jquery-blockui',
+				'accounting',
+				// Product Add-Ons
+				'woocommerce-addons',
+				'woocommerce-addons-validation',
+				'pao-validation',
+				'wc-product-addons',
+				// Quote / Gravity Forms product mod (product pages)
+				'oa-timberfans-gf-mod',
+				'oa-tf-gf-mod',
+			),
+			array(
+				'woocommerce-addons-css',
+				'woocommerce-product-addons',
+				'oa-timberfans-gf-mod',
+			)
+		);
+
+		gp_child_dequeue_by_src_contains(
+			array(
+				'/woocommerce-product-addons/',
+				'/add-to-cart-variation',
+				'/oa-timberfans-gf-mod/',
+			)
+		);
+	}
+
+	// Classic add-to-cart JS: homepage products link through; keep on shop/catalog/product.
+	if ( ! $is_product && ! $is_catalog && ! $is_cart_checkout ) {
+		gp_child_dequeue_handles(
+			array(
+				'wc-add-to-cart',
+				'woocommerce-add-to-cart',
+			),
+			array()
+		);
+
+		gp_child_dequeue_by_src_contains(
+			array(
+				'/frontend/add-to-cart.min.js',
+				'/frontend/add-to-cart.js',
+			)
+		);
+	}
+}
+
+/**
+ * Dequeue/deregister known script and style handles.
+ *
+ * @param string[] $scripts Script handles.
+ * @param string[] $styles  Style handles.
+ */
+function gp_child_dequeue_handles( $scripts, $styles = array() ) {
+	foreach ( (array) $scripts as $handle ) {
+		wp_dequeue_script( $handle );
+		wp_deregister_script( $handle );
+	}
+	foreach ( (array) $styles as $handle ) {
+		wp_dequeue_style( $handle );
+		wp_deregister_style( $handle );
+	}
+}
+
+/**
+ * Dequeue any enqueued script/style whose src contains one of the needles.
+ * Catches plugins that use unpredictable handles.
+ *
+ * @param string[] $needles Path fragments to match in src URLs.
+ */
+function gp_child_dequeue_by_src_contains( $needles ) {
+	$needles = array_filter( array_map( 'strval', (array) $needles ) );
+	if ( ! $needles ) {
+		return;
+	}
+
+	$matches = static function ( $src ) use ( $needles ) {
+		if ( ! $src ) {
+			return false;
+		}
+		foreach ( $needles as $needle ) {
+			if ( strpos( $src, $needle ) !== false ) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	global $wp_scripts, $wp_styles;
+
+	if ( $wp_scripts instanceof WP_Scripts ) {
+		foreach ( $wp_scripts->queue as $handle ) {
+			$src = isset( $wp_scripts->registered[ $handle ]->src ) ? $wp_scripts->registered[ $handle ]->src : '';
+			if ( $matches( $src ) ) {
+				wp_dequeue_script( $handle );
+				wp_deregister_script( $handle );
+			}
+		}
+	}
+
+	if ( $wp_styles instanceof WP_Styles ) {
+		foreach ( $wp_styles->queue as $handle ) {
+			$src = isset( $wp_styles->registered[ $handle ]->src ) ? $wp_styles->registered[ $handle ]->src : '';
+			if ( $matches( $src ) ) {
+				wp_dequeue_style( $handle );
+				wp_deregister_style( $handle );
+			}
+		}
+	}
+}
+

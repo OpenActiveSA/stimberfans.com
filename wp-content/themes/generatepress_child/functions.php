@@ -354,25 +354,27 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
 
 /**
  * ---------------------------------------------------------------------------
- * AJAX add-to-cart on single product pages, then open the mini-cart drawer.
+ * AJAX add-to-cart on single product pages, then open the *visible* mini-cart.
  *
- * Full page reload never fires Woo's wc-blocks_added_to_cart event. AJAX add
- * keeps the mini-cart hydrated and lets it open the same way as the header icon.
+ * There are two mini-cart instances in the header. Woo's open_drawer event only
+ * targets the first one (often blank). The filled drawer opens when we click
+ * the visible header cart button — same as a real user click.
  * ---------------------------------------------------------------------------
  */
-add_filter( 'render_block_woocommerce/mini-cart', 'gp_child_mini_cart_open_on_add', 10, 2 );
-function gp_child_mini_cart_open_on_add( $content, $block ) {
+add_filter( 'render_block_woocommerce/mini-cart', 'gp_child_mini_cart_disable_auto_open', 10, 2 );
+function gp_child_mini_cart_disable_auto_open( $content, $block ) {
+	// Prevent Woo from auto-opening the first (often hidden) mini-cart instance.
 	if ( strpos( $content, 'data-add-to-cart-behaviour=' ) === false ) {
 		$content = preg_replace(
 			'/<div([^>]*class="[^"]*wc-block-mini-cart[^"]*"[^>]*)>/',
-			'<div$1 data-add-to-cart-behaviour="open_drawer">',
+			'<div$1 data-add-to-cart-behaviour="none">',
 			$content,
 			1
 		);
 	} else {
 		$content = preg_replace(
 			'/data-add-to-cart-behaviour="[^"]*"/',
-			'data-add-to-cart-behaviour="open_drawer"',
+			'data-add-to-cart-behaviour="none"',
 			$content
 		);
 	}
@@ -389,10 +391,27 @@ function gp_child_enqueue_ajax_add_to_cart() {
 
 	$js = <<<'JS'
 (function ($) {
-	function ensureOpenDrawerBehaviour() {
+	function disableAutoOpenOnAllMiniCarts() {
 		document.querySelectorAll('.wc-block-mini-cart').forEach(function (el) {
-			el.dataset.addToCartBehaviour = 'open_drawer';
+			el.dataset.addToCartBehaviour = 'none';
 		});
+	}
+
+	function visibleMiniCartButton() {
+		var buttons = document.querySelectorAll('.wc-block-mini-cart__button');
+		for (var i = 0; i < buttons.length; i++) {
+			if (buttons[i].offsetParent !== null) {
+				return buttons[i];
+			}
+		}
+		return buttons[0] || null;
+	}
+
+	function openVisibleMiniCart() {
+		var btn = visibleMiniCartButton();
+		if (btn) {
+			btn.click();
+		}
 	}
 
 	function getCartItemsCount() {
@@ -404,7 +423,7 @@ function gp_child_enqueue_ajax_add_to_cart() {
 		}).catch(function () { return 0; });
 	}
 
-	ensureOpenDrawerBehaviour();
+	disableAutoOpenOnAllMiniCarts();
 
 	$(document).on('submit', 'form.cart', function (e) {
 		var $form = $(this);
@@ -422,16 +441,14 @@ function gp_child_enqueue_ajax_add_to_cart() {
 			return;
 		}
 
-		// Variable products must have a variation selected.
 		var $variationId = $form.find('input.variation_id, input[name="variation_id"]');
 		if ($variationId.length && !parseInt($variationId.val(), 10)) {
 			return;
 		}
 
 		e.preventDefault();
-		ensureOpenDrawerBehaviour();
+		disableAutoOpenOnAllMiniCarts();
 
-		// Strip old notices from earlier failed attempts.
 		$('.woocommerce-notices-wrapper .woocommerce-error, .woocommerce-notices-wrapper .woocommerce-message, .woocommerce-error, .woocommerce-message').filter(function () {
 			return /choose product options|added to your cart/i.test($(this).text());
 		}).remove();
@@ -477,11 +494,13 @@ function gp_child_enqueue_ajax_add_to_cart() {
 
 					$button.addClass('added');
 
-					// One open only: Woo mini-cart listens for this and opens the real drawer
-					// when data-add-to-cart-behaviour="open_drawer". Do NOT also btn.click()
-					// — that opens a second empty overlay (there are two mini-cart instances).
+					// Refresh cart data without auto-opening the first (blank) instance.
+					disableAutoOpenOnAllMiniCarts();
 					document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
 					$(document.body).trigger('added_to_cart', [null, null, $button]);
+
+					// Open only the visible header cart button (the one that works when clicked).
+					setTimeout(openVisibleMiniCart, 300);
 				});
 			},
 			error: function () {

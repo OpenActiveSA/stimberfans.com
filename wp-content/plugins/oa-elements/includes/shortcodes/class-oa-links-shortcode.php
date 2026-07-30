@@ -245,7 +245,7 @@ class OA_Links_Shortcode {
             return '';
         }
         
-        return do_blocks( '<!-- wp:woocommerce/mini-cart {"addToCartBehaviour":"open_drawer"} /-->' );
+        return do_blocks( '<!-- wp:woocommerce/mini-cart /-->' );
     }
     
     /**

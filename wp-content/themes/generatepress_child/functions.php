@@ -355,55 +355,72 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
 /**
  * ---------------------------------------------------------------------------
  * After add-to-cart: open WooCommerce Blocks mini-cart instead of the notice.
+ *
+ * Uses a short-lived cookie (not a body class) so this still works when
+ * WP Rocket serves a cached product page after the add-to-cart redirect.
  * ---------------------------------------------------------------------------
  */
-add_filter( 'wc_add_to_cart_message_html', 'gp_child_suppress_added_to_cart_message', 10, 2 );
-function gp_child_suppress_added_to_cart_message( $message, $products ) {
-	if ( function_exists( 'WC' ) && WC()->session ) {
-		WC()->session->set( 'gp_open_mini_cart', 1 );
-	}
-	return '';
-}
+add_filter( 'wc_add_to_cart_message_html', '__return_empty_string', 100 );
 
-add_filter( 'body_class', 'gp_child_open_mini_cart_body_class' );
-function gp_child_open_mini_cart_body_class( $classes ) {
-	if ( function_exists( 'WC' ) && WC()->session && WC()->session->get( 'gp_open_mini_cart' ) ) {
-		$classes[] = 'gp-open-mini-cart';
-		WC()->session->set( 'gp_open_mini_cart', null );
+add_action( 'woocommerce_add_to_cart', 'gp_child_flag_open_mini_cart', 20 );
+function gp_child_flag_open_mini_cart() {
+	if ( headers_sent() ) {
+		return;
 	}
-	return $classes;
+	// Path=/ so the product page can read it; short TTL.
+	wc_setcookie( 'gp_open_mini_cart', '1', time() + 120 );
 }
 
 add_action( 'wp_enqueue_scripts', 'gp_child_enqueue_open_mini_cart_script', 20 );
 function gp_child_enqueue_open_mini_cart_script() {
-	if ( is_admin() || ! function_exists( 'is_woocommerce' ) ) {
+	if ( is_admin() || ! function_exists( 'WC' ) ) {
 		return;
 	}
 
 	$js = <<<'JS'
 (function ($) {
+	function getCookie(name) {
+		var match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+		return match ? decodeURIComponent(match[1]) : '';
+	}
+
+	function clearOpenCartCookie() {
+		document.cookie = 'gp_open_mini_cart=; Max-Age=0; path=/; SameSite=Lax';
+	}
+
 	function isMiniCartOpen() {
-		var drawer = document.querySelector(
-			'.wc-block-mini-cart__drawer, .wc-block-components-drawer__screen-overlay--with-slide-in, [class*="wc-block-mini-cart"][aria-hidden="false"]'
-		);
-		if (drawer && drawer.getAttribute('aria-hidden') === 'false') {
+		if (document.querySelector('.wc-block-components-drawer__screen-overlay--with-slide-in:not(.wc-block-components-drawer__screen-overlay--is-hidden)')) {
 			return true;
 		}
-		return !!document.querySelector('.wc-block-components-drawer__screen-overlay--with-slide-in:not(.wc-block-components-drawer__screen-overlay--is-hidden)');
+		var dialog = document.querySelector('.wc-block-mini-cart__drawer, .wc-block-mini-cart__template-part, [role="dialog"]');
+		return !!(dialog && dialog.getAttribute('aria-hidden') === 'false');
 	}
 
 	function openMiniCart(attempt) {
 		attempt = attempt || 0;
 		if (isMiniCartOpen()) {
+			clearOpenCartCookie();
 			return;
 		}
+
 		var btn = document.querySelector('.wc-block-mini-cart__button');
 		if (btn) {
 			btn.click();
-			document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
+			try {
+				document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
+				document.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
+			} catch (e) {}
+			setTimeout(function () {
+				if (isMiniCartOpen()) {
+					clearOpenCartCookie();
+				} else if (attempt < 15) {
+					openMiniCart(attempt + 1);
+				}
+			}, 200);
 			return;
 		}
-		if (attempt < 20) {
+
+		if (attempt < 25) {
 			setTimeout(function () {
 				openMiniCart(attempt + 1);
 			}, 150);
@@ -416,17 +433,24 @@ function gp_child_enqueue_open_mini_cart_script() {
 		}).remove();
 	}
 
+	function maybeOpenFromCookie() {
+		if (getCookie('gp_open_mini_cart') === '1') {
+			removeAddedToCartNotices();
+			setTimeout(function () {
+				openMiniCart(0);
+			}, 400);
+		}
+	}
+
 	$(document.body).on('added_to_cart', function () {
 		removeAddedToCartNotices();
-		setTimeout(openMiniCart, 50);
+		setTimeout(function () {
+			openMiniCart(0);
+		}, 50);
 	});
 
-	$(function () {
-		removeAddedToCartNotices();
-		if (document.body.classList.contains('gp-open-mini-cart')) {
-			setTimeout(openMiniCart, 250);
-		}
-	});
+	$(maybeOpenFromCookie);
+	$(window).on('load', maybeOpenFromCookie);
 })(jQuery);
 JS;
 

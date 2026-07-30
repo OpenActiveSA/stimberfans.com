@@ -354,12 +354,164 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
 
 /**
  * ---------------------------------------------------------------------------
- * Mini-cart note:
- * Programmatically opening the WooCommerce Blocks mini-cart drawer (from the
- * "View cart" notice) only shows an empty overlay on this site. Header icon
- * clicks work. Leave the notice's View cart link as the normal /cart/ page.
+ * AJAX add-to-cart on single product pages, then open the mini-cart drawer.
+ *
+ * Full page reload never fires Woo's wc-blocks_added_to_cart event. AJAX add
+ * keeps the mini-cart hydrated and lets it open the same way as the header icon.
  * ---------------------------------------------------------------------------
  */
+add_filter( 'render_block_woocommerce/mini-cart', 'gp_child_mini_cart_open_on_add', 10, 2 );
+function gp_child_mini_cart_open_on_add( $content, $block ) {
+	if ( strpos( $content, 'data-add-to-cart-behaviour=' ) === false ) {
+		$content = preg_replace(
+			'/<div([^>]*class="[^"]*wc-block-mini-cart[^"]*"[^>]*)>/',
+			'<div$1 data-add-to-cart-behaviour="open_drawer">',
+			$content,
+			1
+		);
+	} else {
+		$content = preg_replace(
+			'/data-add-to-cart-behaviour="[^"]*"/',
+			'data-add-to-cart-behaviour="open_drawer"',
+			$content
+		);
+	}
+	return $content;
+}
+
+add_action( 'wp_enqueue_scripts', 'gp_child_enqueue_ajax_add_to_cart', 25 );
+function gp_child_enqueue_ajax_add_to_cart() {
+	if ( is_admin() || ! function_exists( 'is_product' ) || ! is_product() ) {
+		return;
+	}
+
+	wp_enqueue_script( 'wc-add-to-cart' );
+
+	$js = <<<'JS'
+(function ($) {
+	function ensureOpenDrawerBehaviour() {
+		document.querySelectorAll('.wc-block-mini-cart').forEach(function (el) {
+			el.dataset.addToCartBehaviour = 'open_drawer';
+		});
+	}
+
+	function openMiniCartDrawerFallback() {
+		var carts = document.querySelectorAll('.wc-block-mini-cart');
+		var cart = null;
+		for (var i = 0; i < carts.length; i++) {
+			var candidateBtn = carts[i].querySelector('.wc-block-mini-cart__button');
+			if (candidateBtn && candidateBtn.offsetParent !== null) {
+				cart = carts[i];
+				break;
+			}
+		}
+		if (!cart) {
+			cart = carts[0] || null;
+		}
+		if (!cart) {
+			return;
+		}
+		var overlay = cart.querySelector('.wc-block-components-drawer__screen-overlay');
+		if (!overlay) {
+			return;
+		}
+		cart.dataset.isInitiallyOpen = 'true';
+		overlay.classList.add('wc-block-components-drawer__screen-overlay--with-slide-in');
+		overlay.classList.remove('wc-block-components-drawer__screen-overlay--is-hidden');
+	}
+
+	ensureOpenDrawerBehaviour();
+
+	$(document).on('submit', 'form.cart', function (e) {
+		var $form = $(this);
+		var submitter = e.originalEvent && e.originalEvent.submitter ? e.originalEvent.submitter : null;
+
+		// Don't hijack quote / other buttons inside the form.
+		if (submitter && !$(submitter).hasClass('single_add_to_cart_button')) {
+			return;
+		}
+
+		// External products should navigate away.
+		if ($form.closest('.product-type-external').length) {
+			return;
+		}
+
+		var $button = $form.find('.single_add_to_cart_button');
+		if (!$button.length || $button.hasClass('disabled') || $button.prop('disabled')) {
+			return;
+		}
+
+		e.preventDefault();
+		ensureOpenDrawerBehaviour();
+
+		var productId = $form.find('[name="add-to-cart"]').val() || $button.val();
+		var data = $form.serialize();
+		if (data.indexOf('product_id=') === -1 && productId) {
+			data += '&product_id=' + encodeURIComponent(productId);
+		}
+		if (data.indexOf('add-to-cart=') === -1 && productId) {
+			data += '&add-to-cart=' + encodeURIComponent(productId);
+		}
+
+		var ajaxUrl = (typeof wc_add_to_cart_params !== 'undefined')
+			? wc_add_to_cart_params.wc_ajax_url.toString().replace('%%endpoint%%', 'add_to_cart')
+			: '/?wc-ajax=add_to_cart';
+
+		$button.removeClass('added').addClass('loading');
+
+		$.ajax({
+			type: 'POST',
+			url: ajaxUrl,
+			data: data,
+			dataType: 'json',
+			success: function (response) {
+				$button.removeClass('loading');
+
+				if (!response) {
+					return;
+				}
+
+				// Validation / variation errors — fall back to normal POST.
+				if (response.error && response.product_url) {
+					window.location = response.product_url;
+					return;
+				}
+
+				if (response.fragments) {
+					$.each(response.fragments, function (key, value) {
+						$(key).replaceWith(value);
+					});
+				}
+
+				$button.addClass('added');
+
+				// Tell Woo Blocks the cart changed — with open_drawer this opens the mini-cart.
+				document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
+				$(document.body).trigger('added_to_cart', [response.fragments, response.cart_hash, $button]);
+				document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
+
+				// Fallback if the event listener did not open (attribute timing).
+				setTimeout(function () {
+					var open = document.querySelector('.wc-block-components-drawer__screen-overlay--with-slide-in:not(.wc-block-components-drawer__screen-overlay--is-hidden)');
+					if (!open) {
+						openMiniCartDrawerFallback();
+					}
+				}, 400);
+			},
+			error: function () {
+				$button.removeClass('loading');
+				$form.off('submit');
+				$form.get(0).submit();
+			}
+		});
+	});
+})(jQuery);
+JS;
+
+	$handle = wp_script_is( 'wc-add-to-cart', 'enqueued' ) ? 'wc-add-to-cart' : 'jquery';
+	wp_add_inline_script( $handle, $js, 'after' );
+}
+
 // Clear any leftover auto-open cookie from earlier experiments.
 add_action( 'init', 'gp_child_clear_legacy_open_mini_cart_cookie', 1 );
 function gp_child_clear_legacy_open_mini_cart_cookie() {

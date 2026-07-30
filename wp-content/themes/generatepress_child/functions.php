@@ -354,20 +354,19 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
 
 /**
  * ---------------------------------------------------------------------------
- * After add-to-cart: open WooCommerce Blocks mini-cart instead of the notice.
- *
- * Cookie flag works with WP Rocket page cache. Cleared on first page view so
- * the drawer does not keep opening while browsing other pages.
+ * After add-to-cart: keep the notice, but make "View cart" open the mini-cart
+ * drawer instead of going to the cart page. (Auto-opening the drawer on reload
+ * was blanking out under WP Rocket page cache.)
  * ---------------------------------------------------------------------------
  */
-add_filter( 'wc_add_to_cart_message_html', '__return_empty_string', 100 );
-
-add_action( 'woocommerce_add_to_cart', 'gp_child_flag_open_mini_cart', 20 );
-function gp_child_flag_open_mini_cart() {
-	if ( headers_sent() ) {
+// Clear any leftover auto-open cookie from the earlier approach.
+add_action( 'init', 'gp_child_clear_legacy_open_mini_cart_cookie', 1 );
+function gp_child_clear_legacy_open_mini_cart_cookie() {
+	if ( empty( $_COOKIE['gp_open_mini_cart'] ) || headers_sent() ) {
 		return;
 	}
-	wc_setcookie( 'gp_open_mini_cart', '1', time() + 60 );
+	wc_setcookie( 'gp_open_mini_cart', '', time() - YEAR_IN_SECONDS );
+	unset( $_COOKIE['gp_open_mini_cart'] );
 }
 
 add_action( 'wp_enqueue_scripts', 'gp_child_enqueue_open_mini_cart_script', 20 );
@@ -378,117 +377,34 @@ function gp_child_enqueue_open_mini_cart_script() {
 
 	$js = <<<'JS'
 (function ($) {
-	var openAttempted = false;
-
-	function getCookie(name) {
-		var match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
-		return match ? decodeURIComponent(match[1]) : '';
-	}
-
-	function clearOpenCartCookie() {
-		var expires = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
-		[
-			'gp_open_mini_cart=; Max-Age=0; path=/',
-			'gp_open_mini_cart=; ' + expires + '; path=/',
-			'gp_open_mini_cart=; Max-Age=0; path=/; SameSite=Lax',
-			'gp_open_mini_cart=; Max-Age=0; path=/; SameSite=Lax; Secure'
-		].forEach(function (c) {
-			document.cookie = c;
-		});
-	}
-
-	function waitForMiniCartButton(timeoutMs) {
-		return new Promise(function (resolve) {
-			var start = Date.now();
-			(function poll() {
-				var btn = document.querySelector('.wc-block-mini-cart__button');
-				if (btn) {
-					resolve(btn);
-					return;
-				}
-				if (Date.now() - start > timeoutMs) {
-					resolve(null);
-					return;
-				}
-				setTimeout(poll, 100);
-			})();
-		});
-	}
-
-	function refreshCartThen(callback) {
-		if (typeof fetch !== 'function') {
-			callback();
-			return;
-		}
-		fetch('/wp-json/wc/store/v1/cart', {
-			credentials: 'same-origin',
-			headers: { 'Accept': 'application/json' }
-		}).catch(function () { /* ignore */ }).finally(function () {
-			callback();
-		});
-	}
-
-	function openMiniCartOnce() {
-		if (openAttempted) {
-			return;
-		}
-		openAttempted = true;
-
-		waitForMiniCartButton(8000).then(function (btn) {
-			if (!btn) {
-				return;
+	function visibleMiniCartButton() {
+		var buttons = document.querySelectorAll('.wc-block-mini-cart__button');
+		for (var i = 0; i < buttons.length; i++) {
+			if (buttons[i].offsetParent !== null) {
+				return buttons[i];
 			}
-			setTimeout(function () {
-				refreshCartThen(function () {
-					setTimeout(function () {
-						btn.click();
-					}, 150);
-				});
-			}, 300);
-		});
-	}
-
-	function removeAddedToCartNotices() {
-		$('.woocommerce-message').filter(function () {
-			return /added to (your|the) cart/i.test($(this).text());
-		}).remove();
-	}
-
-	function maybeOpenFromCookie() {
-		var shouldOpen = getCookie('gp_open_mini_cart') === '1';
-		// Always consume the cookie on first hit so other pages never reopen it.
-		clearOpenCartCookie();
-		if (!shouldOpen) {
-			return;
 		}
-		// Only auto-open after add-to-cart on a product page (form reload flow).
-		if (!document.body.classList.contains('single-product')) {
-			return;
-		}
-		removeAddedToCartNotices();
-		openMiniCartOnce();
+		return buttons[0] || null;
 	}
 
-	$(document.body).on('added_to_cart', function () {
-		clearOpenCartCookie();
-		removeAddedToCartNotices();
-		openAttempted = false;
-		setTimeout(openMiniCartOnce, 200);
+	function openMiniCart() {
+		var btn = visibleMiniCartButton();
+		if (btn) {
+			btn.click();
+		}
+	}
+
+	// Notice "View cart" → open drawer instead of /cart/.
+	$(document).on('click', '.woocommerce-message a.button.wc-forward, .woocommerce-message a.wc-forward', function (e) {
+		e.preventDefault();
+		$(this).closest('.woocommerce-message').remove();
+		openMiniCart();
 	});
 
-	// Clear/consume cookie ASAP so it does not reopen on the next page.
-	function boot() {
-		if (!document.body) {
-			return;
-		}
-		maybeOpenFromCookie();
-	}
-	if (document.body) {
-		boot();
-	} else {
-		document.addEventListener('DOMContentLoaded', boot);
-	}
-	$(boot);
+	// AJAX add-to-cart (archives etc.): open drawer when WC fires the event.
+	$(document.body).on('added_to_cart', function () {
+		setTimeout(openMiniCart, 300);
+	});
 })(jQuery);
 JS;
 

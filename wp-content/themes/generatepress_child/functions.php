@@ -356,8 +356,9 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
  * ---------------------------------------------------------------------------
  * After add-to-cart: open WooCommerce Blocks mini-cart instead of the notice.
  *
- * Uses a short-lived cookie (not a body class) so this still works when
- * WP Rocket serves a cached product page after the add-to-cart redirect.
+ * Uses a short-lived cookie so this works with WP Rocket page cache.
+ * Opens the drawer once, after the mini-cart / Store API are ready — avoids
+ * blank drawers from clicking too early or retry-toggling the button.
  * ---------------------------------------------------------------------------
  */
 add_filter( 'wc_add_to_cart_message_html', '__return_empty_string', 100 );
@@ -367,7 +368,6 @@ function gp_child_flag_open_mini_cart() {
 	if ( headers_sent() ) {
 		return;
 	}
-	// Path=/ so the product page can read it; short TTL.
 	wc_setcookie( 'gp_open_mini_cart', '1', time() + 120 );
 }
 
@@ -379,6 +379,8 @@ function gp_child_enqueue_open_mini_cart_script() {
 
 	$js = <<<'JS'
 (function ($) {
+	var openAttempted = false;
+
 	function getCookie(name) {
 		var match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
 		return match ? decodeURIComponent(match[1]) : '';
@@ -388,43 +390,62 @@ function gp_child_enqueue_open_mini_cart_script() {
 		document.cookie = 'gp_open_mini_cart=; Max-Age=0; path=/; SameSite=Lax';
 	}
 
-	function isMiniCartOpen() {
-		if (document.querySelector('.wc-block-components-drawer__screen-overlay--with-slide-in:not(.wc-block-components-drawer__screen-overlay--is-hidden)')) {
-			return true;
-		}
-		var dialog = document.querySelector('.wc-block-mini-cart__drawer, .wc-block-mini-cart__template-part, [role="dialog"]');
-		return !!(dialog && dialog.getAttribute('aria-hidden') === 'false');
+	function waitForMiniCartButton(timeoutMs) {
+		return new Promise(function (resolve) {
+			var start = Date.now();
+			(function poll() {
+				var btn = document.querySelector('.wc-block-mini-cart__button');
+				if (btn) {
+					resolve(btn);
+					return;
+				}
+				if (Date.now() - start > timeoutMs) {
+					resolve(null);
+					return;
+				}
+				setTimeout(poll, 100);
+			})();
+		});
 	}
 
-	function openMiniCart(attempt) {
-		attempt = attempt || 0;
-		if (isMiniCartOpen()) {
-			clearOpenCartCookie();
+	function refreshCartThen(callback) {
+		var url = (window.wcSettings && window.wcSettings.storeApiNonce)
+			? '/wp-json/wc/store/v1/cart'
+			: '/wp-json/wc/store/v1/cart';
+
+		if (typeof fetch !== 'function') {
+			callback();
 			return;
 		}
 
-		var btn = document.querySelector('.wc-block-mini-cart__button');
-		if (btn) {
-			btn.click();
-			try {
-				document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
-				document.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
-			} catch (e) {}
-			setTimeout(function () {
-				if (isMiniCartOpen()) {
-					clearOpenCartCookie();
-				} else if (attempt < 15) {
-					openMiniCart(attempt + 1);
-				}
-			}, 200);
+		fetch(url, {
+			credentials: 'same-origin',
+			headers: { 'Accept': 'application/json' }
+		}).catch(function () { /* ignore */ }).finally(function () {
+			callback();
+		});
+	}
+
+	function openMiniCartOnce() {
+		if (openAttempted) {
 			return;
 		}
+		openAttempted = true;
+		clearOpenCartCookie();
 
-		if (attempt < 25) {
+		waitForMiniCartButton(8000).then(function (btn) {
+			if (!btn) {
+				return;
+			}
+			// Let the block hydrate, then warm cart data, then open once.
 			setTimeout(function () {
-				openMiniCart(attempt + 1);
-			}, 150);
-		}
+				refreshCartThen(function () {
+					setTimeout(function () {
+						btn.click();
+					}, 150);
+				});
+			}, 300);
+		});
 	}
 
 	function removeAddedToCartNotices() {
@@ -434,23 +455,22 @@ function gp_child_enqueue_open_mini_cart_script() {
 	}
 
 	function maybeOpenFromCookie() {
-		if (getCookie('gp_open_mini_cart') === '1') {
-			removeAddedToCartNotices();
-			setTimeout(function () {
-				openMiniCart(0);
-			}, 400);
+		if (getCookie('gp_open_mini_cart') !== '1') {
+			return;
 		}
+		removeAddedToCartNotices();
+		openMiniCartOnce();
 	}
 
 	$(document.body).on('added_to_cart', function () {
 		removeAddedToCartNotices();
-		setTimeout(function () {
-			openMiniCart(0);
-		}, 50);
+		openAttempted = false;
+		setTimeout(openMiniCartOnce, 200);
 	});
 
-	$(maybeOpenFromCookie);
-	$(window).on('load', maybeOpenFromCookie);
+	$(window).on('load', function () {
+		setTimeout(maybeOpenFromCookie, 200);
+	});
 })(jQuery);
 JS;
 

@@ -1,0 +1,354 @@
+<?php
+/**
+ * GeneratePress child theme functions and definitions.
+ *
+ * Add your custom PHP in this file.
+ * Only edit this file if you have direct access to it on your server (to fix errors if they happen).
+ */
+
+ // Fix for missing oa_debug_class_loading function
+function oa_debug_class_loading() {
+    // Empty function to prevent fatal error
+    return;
+}
+
+ // Replace WooCommerce default placeholder with a custom image in your theme
+function custom_woocommerce_placeholder_img_src( $src ) {
+    return get_stylesheet_directory_uri() . '/assets/images/product-placeholder.png';
+}
+add_filter( 'woocommerce_placeholder_img_src', 'custom_woocommerce_placeholder_img_src', 10 );
+
+add_filter( 'woocommerce_placeholder_img', function( $image_html ) {
+    $image_url = get_stylesheet_directory_uri() . '/assets/images/product-placeholder.png';
+    return '<img src="' . esc_url( $image_url ) . '" alt="Placeholder" class="woocommerce-placeholder wp-post-image" />';
+});
+
+// Enqueue Owl Carousel assets (only once)
+function gp_enqueue_owl_carousel() {
+    static $done = false;
+    if ( $done ) return;
+    wp_enqueue_script('gp-owl-carousel','https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js',['jquery'],'2.3.4',true);
+    wp_enqueue_style('gp-owl-carousel-style','https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.carousel.min.css',[],'2.3.4');
+    wp_enqueue_style('gp-owl-carousel-theme','https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.theme.default.min.css',[],'2.3.4');
+    $done = true;
+}
+
+// Currency widget
+function highlight_current_currency_menu_item($classes, $item) {
+    if (strpos($item->url, home_url()) !== false) {
+        $classes[] = 'current-currency';
+    }
+    return $classes;
+}
+add_filter('nav_menu_css_class', 'highlight_current_currency_menu_item', 10, 2);
+
+// Shortcode: [menu name="Footer Menu"]
+function shortcode_menu( $atts ) {
+    $atts = shortcode_atts( [
+        'name' => '',
+        'class' => 'shortcode-menu'
+    ], $atts );
+
+    return wp_nav_menu( [
+        'menu' => $atts['name'],
+        'container' => 'div',
+        'container_class' => $atts['class'],
+        'echo' => false
+    ]);
+}
+add_shortcode( 'menu', 'shortcode_menu' );
+
+
+// Output a simple currency switcher next to the Woo Mini Cart block
+function gp_child_output_currency_switcher() {
+    if ( is_admin() ) return;
+    ?>
+    <style>
+    .gp-currency-switcher{display:inline-flex;align-items:center;margin-left:8px}
+    .gp-currency-switcher select{font-size:12px;line-height:1.4;padding:2px 6px}
+    </style>
+    <script>
+    (function(){
+        function onReady(fn){if(document.readyState!=='loading'){fn()}else{document.addEventListener('DOMContentLoaded',fn)}}
+        onReady(function(){
+            var miniCart = document.querySelector('.wp-block-woocommerce-mini-cart, .wc-block-mini-cart');
+            if(!miniCart || !miniCart.parentNode) return;
+            // Avoid duplicates
+            if(miniCart.nextElementSibling && miniCart.nextElementSibling.classList && miniCart.nextElementSibling.classList.contains('gp-currency-switcher')) return;
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'gp-currency-switcher';
+
+            var select = document.createElement('select');
+            select.setAttribute('aria-label','Currency');
+            var optZAR = document.createElement('option'); optZAR.value = 'ZAR'; optZAR.textContent = 'ZAR';
+            var optUSD = document.createElement('option'); optUSD.value = 'USD'; optUSD.textContent = 'USD';
+            select.appendChild(optZAR); select.appendChild(optUSD);
+
+            var path = window.location.pathname || '/';
+            var inUSD = /^\/usd(\/|$)/i.test(path);
+            select.value = inUSD ? 'USD' : 'ZAR';
+
+            select.addEventListener('change', function(){
+                var loc = new URL(window.location.href);
+                var p = loc.pathname || '/';
+                if(this.value === 'USD'){
+                    if(!/^\/usd(\/|$)/i.test(p)){
+                        // Ensure single slash when prefixing
+                        var newPath = '/usd' + (p.charAt(0)==='/' ? '' : '/') + p;
+                        loc.pathname = newPath.replace(/\/+/, '/');
+                    }
+                } else {
+                    // Remove leading /usd segment
+                    loc.pathname = p.replace(/^\/usd(\/)?/i, '/');
+                }
+                window.location.href = loc.toString();
+            });
+
+            wrapper.appendChild(select);
+            miniCart.parentNode.insertBefore(wrapper, miniCart.nextSibling);
+        });
+    })();
+    </script>
+    <?php
+}
+// Disabled currency switcher dropdown
+// add_action( 'wp_footer', 'gp_child_output_currency_switcher' );
+
+// Disable zoom on product images
+add_filter( 'woocommerce_single_product_zoom_enabled', '__return_false' );
+
+// Blog: always show "Read article" for every post (excerpt or full content), regardless of length
+add_action( 'generate_after_entry_content', 'gp_child_output_read_article_link', 5 );
+function gp_child_output_read_article_link() {
+    if ( ! is_main_query() || ! in_the_loop() ) {
+        return;
+    }
+    if ( ! ( is_home() || is_archive() || is_search() ) ) {
+        return;
+    }
+    $id = get_the_ID();
+    if ( ! $id ) {
+        return;
+    }
+    $title_attr = the_title_attribute( array( 'echo' => false ) );
+    $aria      = sprintf(
+        _x( 'Read more about %s', 'read more about post title', 'generatepress_child' ),
+        the_title_attribute( array( 'echo' => false ) )
+    );
+    printf(
+        '<p class="read-more-container"><a title="%1$s" class="read-more button" href="%2$s" aria-label="%3$s">%4$s</a></p>',
+        esc_attr( $title_attr ),
+        esc_url( get_permalink( $id ) ),
+        esc_attr( $aria ),
+        esc_html__( 'Read article', 'generatepress_child' )
+    );
+}
+
+// On blog/archive: use "…" only in excerpt (no link inside excerpt); the link is output by the hook above
+add_filter( 'excerpt_more', 'gp_child_excerpt_more_no_link', 20 );
+function gp_child_excerpt_more_no_link( $more ) {
+    if ( ! is_main_query() || ! in_the_loop() || ! ( is_home() || is_archive() || is_search() ) ) {
+        return $more;
+    }
+    return ' …';
+}
+
+// Disable Gravity Forms quote email custom styling
+// Remove the custom email styling filters after the plugin initializes
+add_action( 'init', function() {
+    global $wp_filter;
+    
+    // Remove gform_notification filter from OA_TFP_Gravity_Forms class
+    if ( isset( $wp_filter['gform_notification'] ) ) {
+        foreach ( $wp_filter['gform_notification']->callbacks as $priority => $callbacks ) {
+            foreach ( $callbacks as $callback_id => $callback ) {
+                if ( is_array( $callback['function'] ) && 
+                     is_object( $callback['function'][0] ) && 
+                     get_class( $callback['function'][0] ) === 'OA_TFP_Gravity_Forms' &&
+                     $callback['function'][1] === 'add_email_styles' ) {
+                    remove_filter( 'gform_notification', $callback['function'], $priority );
+                }
+            }
+        }
+    }
+    
+    // Remove gform_pre_send_email filter from OA_TFP_Gravity_Forms class
+    if ( isset( $wp_filter['gform_pre_send_email'] ) ) {
+        foreach ( $wp_filter['gform_pre_send_email']->callbacks as $priority => $callbacks ) {
+            foreach ( $callbacks as $callback_id => $callback ) {
+                if ( is_array( $callback['function'] ) && 
+                     is_object( $callback['function'][0] ) && 
+                     get_class( $callback['function'][0] ) === 'OA_TFP_Gravity_Forms' &&
+                     $callback['function'][1] === 'inject_email_styles' ) {
+                    remove_filter( 'gform_pre_send_email', $callback['function'], $priority );
+                }
+            }
+        }
+    }
+}, 99 ); // High priority to run after plugins are loaded
+
+/**
+ * Gravity Forms: remove images from Fan options (nested form) section in one notification.
+ * - "Admin Notification" = Fan options section has no images (rest of email unchanged).
+ * - "Timber Fans Client" = keeps images.
+ * Form ID 1 = Request a quote; nested Fan options form ID = 3.
+ */
+add_filter( 'gform_pre_send_email', 'gp_child_gf_remove_images_from_notification', 15, 4 );
+function gp_child_gf_remove_images_from_notification( $email, $message_format, $notification, $entry ) {
+	// Only Request a quote form (ID 1)
+	if ( (int) rgar( $entry, 'form_id' ) !== 1 ) {
+		return $email;
+	}
+	// Only the notification that should have no images in the Fan options part
+	$notification_name_no_images = 'Admin Notification';
+	if ( empty( $notification['name'] ) || $notification['name'] !== $notification_name_no_images ) {
+		return $email;
+	}
+	// Only HTML emails
+	if ( $message_format !== 'html' || empty( $email['message'] ) ) {
+		return $email;
+	}
+
+	$email['message'] = gp_child_gf_strip_images_in_fan_options_section( $email['message'] );
+	return $email;
+}
+
+/**
+ * Remove <img> tags only inside the Fan options (nested) section of the email HTML.
+ * Nested section is wrapped in a table with style containing "faebd2" (GP Nested Forms markup).
+ */
+function gp_child_gf_strip_images_in_fan_options_section( $html ) {
+	if ( strpos( $html, '<img' ) === false ) {
+		return $html;
+	}
+	if ( strpos( $html, 'faebd2' ) === false ) {
+		return $html;
+	}
+
+	$libxml_prev = libxml_use_internal_errors( true );
+	$doc = new DOMDocument();
+	$doc->loadHTML( '<?xml encoding="UTF-8"><div id="gf-email-root">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+	libxml_use_internal_errors( $libxml_prev );
+
+	$xpath = new DOMXPath( $doc );
+	$tables = $xpath->query( '//table[contains(@style, "faebd2")]' );
+	if ( ! $tables || $tables->length === 0 ) {
+		return $html;
+	}
+
+	foreach ( $tables as $table ) {
+		$imgs = $xpath->query( './/img', $table );
+		if ( ! $imgs ) {
+			continue;
+		}
+		for ( $i = $imgs->length - 1; $i >= 0; $i-- ) {
+			$img = $imgs->item( $i );
+			if ( $img && $img->parentNode ) {
+				$img->parentNode->removeChild( $img );
+			}
+		}
+	}
+
+	$root = $doc->getElementById( 'gf-email-root' );
+	if ( ! $root ) {
+		return $html;
+	}
+	$out = '';
+	foreach ( $root->childNodes as $child ) {
+		$out .= $doc->saveHTML( $child );
+	}
+	return $out;
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * Google Fonts performance: font-display: swap + trim Montserrat weights.
+ *
+ * GeneratePress was loading all 18 Montserrat variants (100–900 + italics)
+ * with display=auto, which blocks text rendering. We force display=swap and
+ * keep only the weights the site actually uses.
+ *
+ * To change which weights load, edit $keep_weights below. Each number maps to:
+ *   400 = Regular, 500 = Medium, 600 = SemiBold, 700 = Bold, 800 = ExtraBold.
+ * Add italics with e.g. '700italic' if a design needs italic text.
+ * ---------------------------------------------------------------------------
+ */
+add_filter( 'generate_google_font_display', 'gp_child_google_font_display', 99 );
+function gp_child_google_font_display() {
+	return 'swap';
+}
+
+add_filter( 'generate_typography_google_fonts', 'gp_child_trim_montserrat_weights', 99 );
+function gp_child_trim_montserrat_weights( $fonts ) {
+	if ( empty( $fonts ) ) {
+		return $fonts;
+	}
+
+	// Weights to keep for Montserrat. Adjust to match your design.
+	$keep_weights = array( '400', '500', '600', '700' );
+
+	// GeneratePress joins multiple families with a pipe: "Montserrat:100,...|Other:400".
+	$families = explode( '|', $fonts );
+
+	foreach ( $families as $index => $family ) {
+		// Only touch the Montserrat family; leave everything else untouched.
+		if ( strpos( $family, 'Montserrat:' ) === 0 ) {
+			$families[ $index ] = 'Montserrat:' . implode( ',', $keep_weights );
+		}
+	}
+
+	return implode( '|', $families );
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * Gotham (self-hosted) fallback stack.
+ *
+ * The Font Library defines --gp-font--gotham as just "Gotham" with no fallback,
+ * so while the font loads the browser shows Times (serif) — a jarring flash,
+ * most visible on the non-bold part of the hero H1 ("ceiling fans").
+ *
+ * Gotham here is actually Gotham *Condensed*, so we fall back to Arial Narrow
+ * (similar width) and then generic sans-serif. This removes the Times flash.
+ * ---------------------------------------------------------------------------
+ */
+add_action( 'wp_head', 'gp_child_gotham_font_fallback', 100 );
+function gp_child_gotham_font_fallback() {
+	echo '<style id="gp-child-gotham-fallback">:root{--gp-font--gotham:"Gotham","Arial Narrow","Helvetica Neue",Arial,sans-serif !important;--gp-font-gotham:"Gotham","Arial Narrow","Helvetica Neue",Arial,sans-serif !important;}</style>' . "\n";
+}
+
+// Maintenance Mode
+// Set to true to enable maintenance mode, false to disable
+define( 'MAINTENANCE_MODE', false );
+
+function show_maintenance_page() {
+    // Allow admins to access the site even in maintenance mode
+    if ( current_user_can( 'administrator' ) ) {
+        return;
+    }
+    
+    // Allow access to wp-admin and wp-login.php
+    if ( is_admin() || strpos( $_SERVER['REQUEST_URI'], 'wp-login.php' ) !== false || strpos( $_SERVER['REQUEST_URI'], 'wp-admin' ) !== false ) {
+        return;
+    }
+    
+    // Load the maintenance page
+    $maintenance_file = ABSPATH . 'maintenance.php';
+    if ( file_exists( $maintenance_file ) ) {
+        include $maintenance_file;
+        exit;
+    } else {
+        // Fallback maintenance message if file doesn't exist
+        wp_die( 
+            '<h1>Site Under Maintenance</h1><p>We are currently performing scheduled maintenance. Please check back soon.</p>',
+            'Site Under Maintenance',
+            array( 'response' => 503 )
+        );
+    }
+}
+
+if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
+    add_action( 'template_redirect', 'show_maintenance_page', 1 );
+}
+

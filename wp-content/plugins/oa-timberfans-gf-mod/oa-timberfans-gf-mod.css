@@ -1,0 +1,388 @@
+/**
+ * OA TimberFans GF Mod Styles
+ *
+ * @package OA_TimberFans_GF_Mod
+ * @since 1.0.0
+ */
+
+/* ==========================================================================
+   Shared Classes
+   ========================================================================== */
+
+/* Common disabled state */
+.oa-tf-disabled {
+    opacity: 0.3;
+}
+
+/* Common unavailable state */
+.oa-tf-unavailable {
+    display: none !important;
+    opacity: 0.25 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.oa-tf-unavailable input[type="radio"] {
+    display: none !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+/* Common no options available message */
+.oa-tf-no-options-available {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+}
+
+/* Common grid layout for image-based fields (Products = 5 per row) */
+.oa-tf-grid-field .gfield_radio {
+    display: grid !important;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 15px !important;
+}
+
+/* Timber Finish & Metal Finish = 6 per row */
+#field_3_5.oa-tf-grid-field .gfield_radio,
+#field_3_6.oa-tf-grid-field .gfield_radio {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.oa-tf-grid-field .gfield_radio .gchoice {
+    padding-block-end: 0 !important;
+    padding-inline-end: 0 !important;
+}
+
+.oa-tf-grid-field .gfield_radio li {
+    margin: 0 !important;
+}
+
+.oa-tf-grid-field .gfield_radio label {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    border: 2px solid transparent;
+}
+
+.oa-tf-grid-field .gfield_radio input[type="radio"] {
+    display: none;
+}
+
+.oa-tf-grid-field .gfield_radio input[type="radio"]:checked + label img {
+    box-shadow: 0 0 0px 2px #222;
+}
+
+.oa-tf-grid-field .gfield_radio input[type="radio"]:checked + label::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    background-image: url('./assets/icon-check.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 10;
+}
+
+.oa-tf-grid-field .gfield_radio img {
+    margin-bottom: 10px;
+    background-color: #f7f6f5;
+    border-radius: 5px;
+    overflow: hidden;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+}
+
+/* Common white image outline */
+.oa-tf-grid-field .gfield_radio img[alt*="white"],
+.oa-tf-grid-field .gfield_radio img[alt*="White"] {
+    box-shadow: 0 0 0px 2px #e0e0e0;
+}
+
+/* Common flex layout for button-based fields */
+.oa-tf-flex-field .gfield_radio {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    flex-direction: row;
+}
+
+.oa-tf-flex-field .gfield_radio .gchoice {
+    padding-block-end: 0;
+    padding-inline-end: 0;
+}
+
+.oa-tf-flex-field .gfield_radio li {
+    margin: 0 !important;
+}
+
+.oa-tf-flex-field .gfield_radio label {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 12px 30px 12px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    border: 2px solid #e0e0e0;
+    background-color: #f9f9f9;
+    justify-content: center;
+}
+
+.oa-tf-flex-field .gfield_radio label:hover {
+    border-color: #ccc;
+    background-color: #f0f0f0;
+}
+
+.oa-tf-flex-field .gfield_radio input[type="radio"] {
+    display: none;
+}
+
+.oa-tf-flex-field .gfield_radio input[type="radio"]:checked + label {
+    border-color: #222;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.oa-tf-flex-field .gfield_radio input[type="radio"]:checked + label::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 16px;
+    height: 16px;
+    background-image: url('./assets/icon-check.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 10;
+}
+
+/* Common focus state */
+.oa-tf-field .gfield_radio label:focus-within {
+    outline: 2px solid #007cba;
+    outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Disabled States
+   ========================================================================== */
+
+/* Legacy disabled classes for backward compatibility */
+.disabled-size,
+.disabled-finish,
+.disabled-timber-finish,
+.disabled-metal-finish {
+    opacity: 0.3;
+}
+
+/* ==========================================================================
+   Unavailable States
+   ========================================================================== */
+
+.gchoice.oa-tf-unavailable {
+    display: none !important;
+    opacity: 0.25 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.gchoice.oa-tf-unavailable input[type="radio"] {
+    display: none !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+/* ==========================================================================
+   No Options Available Messages
+   ========================================================================== */
+
+/* Legacy no-options classes for backward compatibility */
+.no-sizes-available,
+.no-finishes-available,
+.no-timber-finishes-available,
+.no-metal-finishes-available {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+}
+
+/* ==========================================================================
+   Loading States
+   ========================================================================== */
+
+/* Individual field loading state */
+.loading {
+    pointer-events: none;
+    position: relative;
+}
+
+.loading .ginput_container {
+    opacity: 0.25;
+}
+
+/* Field-specific loading indicator */
+.loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 30px;
+    background-image: url('./assets/icon-loader.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 100;
+    pointer-events: none;
+    animation: spin 1s linear infinite;
+}
+
+
+
+@keyframes spin {
+    0% {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+    100% {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   Dependent Fields Loading State
+   ========================================================================== */
+
+/* Specific field loading states for backward compatibility */
+#field_3_1.loading,
+#field_3_4.loading,
+#field_3_5.loading,
+#field_3_6.loading,
+#field_3_7.loading {
+    /* opacity: 0.25; */
+    pointer-events: none;
+    position: relative;
+}
+
+/* Ensure loading indicators work well with grid and flex layouts */
+.oa-tf-grid-field.loading::after,
+.oa-tf-flex-field.loading::after {
+    z-index: 200;
+}
+
+/* ==========================================================================
+   Field-Specific Styling
+   ========================================================================== */
+
+/* Fan Range (Field 1) - Grid Layout */
+#field_3_1 {
+    /* Inherits from .oa-tf-grid-field */
+}
+
+/* Fan Size (Field 4) - Flex Layout */
+#field_3_4 {
+    /* Inherits from .oa-tf-flex-field */
+}
+
+/* Timber Finish (Field 5) - Grid Layout */
+#field_3_5 {
+    /* Inherits from .oa-tf-grid-field */
+}
+
+/* Metal Finish (Field 6) - Grid Layout */
+#field_3_6 {
+    /* Inherits from .oa-tf-grid-field */
+}
+
+/* Speed Regulator (Field 7) - Flex Layout */
+#field_3_7 {
+    /* Inherits from .oa-tf-flex-field */
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    /* Grid fields responsive adjustments */
+    .oa-tf-grid-field .gfield_radio {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    
+    /* Flex field responsive adjustments */
+    .oa-tf-flex-field .gfield_radio {
+        gap: 15px;
+    }
+    
+    /* Check icon size adjustments for mobile */
+    .oa-tf-grid-field .gfield_radio input[type="radio"]:checked + label::after {
+        width: 16px;
+        height: 16px;
+        top: 10px;
+        right: 10px;
+    }
+    
+    /* Loading indicator adjustments for mobile */
+    .loading::after {
+        width: 25px;
+        height: 25px;
+    }
+    
+
+}
+
+@media (max-width: 480px) {
+    /* Grid fields mobile adjustments */
+    .oa-tf-grid-field .gfield_radio {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    
+    .oa-tf-grid-field .gfield_radio label {
+        font-size: 0.9em;
+    }
+    
+    /* Flex field mobile adjustments */
+    .oa-tf-flex-field .gfield_radio {
+        gap: 10px;
+    }
+    
+    .oa-tf-flex-field .gfield_radio label {
+        font-size: 0.9em;
+    }
+    
+    /* Loading indicator adjustments for small mobile */
+    .loading::after {
+        width: 20px;
+        height: 20px;
+    }
+    
+
+}
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+
+@media print {
+    .loading {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+}

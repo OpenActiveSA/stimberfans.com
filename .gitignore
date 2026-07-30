@@ -1,0 +1,24 @@
+# Secrets & local env
+.env
+.env.*
+wp-config.php
+**/wp-config.php
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# WordPress runtime (should never be in this repo)
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backups-dup-pro/
+wp-content/wflogs/
+
+# Dependencies / build
+node_modules/
+vendor/
+*.log

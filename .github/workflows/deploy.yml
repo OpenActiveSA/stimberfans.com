@@ -1,0 +1,51 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy child theme
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o IdentitiesOnly=yes" \
+            ./wp-content/themes/generatepress_child/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/wp-content/themes/generatepress_child/
+
+      - name: Deploy custom plugins
+        run: |
+          PLUGINS=(
+            chadgpt-gp-header-layout-mods
+            oa-currency-converter
+            oa-elements
+            oa-gp-header-mods
+            oa-merchant-feed
+            oa-timberfans-gf-mod
+            oa-timberfans-product-mods
+            oa-woo-stock
+          )
+          for plugin in "${PLUGINS[@]}"; do
+            echo "Deploying $plugin ..."
+            rsync -avz --delete \
+              -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o IdentitiesOnly=yes" \
+              "./wp-content/plugins/$plugin/" \
+              "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/wp-content/plugins/$plugin/"
+          done
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

@@ -1,0 +1,241 @@
+/**
+ * Simple Black & White Gravity Forms Email Styling
+ * Clean, minimal design with outlines
+ */
+
+/* Email Container Reset */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #000000;
+    background-color: #ffffff;
+}
+
+/* Override all inline font tags */
+font {
+    font-family: inherit !important;
+    font-size: inherit !important;
+    color: inherit !important;
+}
+
+/* Main wrapper tables */
+table[bgcolor="#EAEAEA"] {
+    background-color: transparent !important;
+    border: none !important;
+    border-spacing: 0 !important;
+    margin-bottom: 15px !important;
+}
+
+table[bgcolor="#FFFFFF"] {
+    background-color: #ffffff !important;
+    border: 2px solid #000000 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+
+/* Header rows with labels */
+tr[bgcolor="#EAF2FA"],
+tr[bgcolor="#FAF4EA"] {
+    background-color: #ffffff !important;
+    border-bottom: 2px solid #000000 !important;
+}
+
+tr[bgcolor="#EAF2FA"] td,
+tr[bgcolor="#FAF4EA"] td {
+    padding: 12px 16px !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    color: #000000 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    background-color: #ffffff !important;
+}
+
+tr[bgcolor="#EAF2FA"] td strong,
+tr[bgcolor="#FAF4EA"] td strong {
+    color: #000000 !important;
+    font-weight: 700 !important;
+}
+
+/* Content rows */
+tr[bgcolor="#FFFFFF"] td {
+    padding: 12px 16px !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #cccccc !important;
+    color: #000000 !important;
+}
+
+/* Remove the spacer column */
+tr[bgcolor="#FFFFFF"] td[width="20"] {
+    display: none !important;
+}
+
+/* Images in content */
+tr[bgcolor="#FFFFFF"] img {
+    max-width: 100px !important;
+    height: auto !important;
+    border: 1px solid #000000 !important;
+    border-radius: 0 !important;
+    margin-right: 10px !important;
+    vertical-align: middle !important;
+    box-shadow: none !important;
+}
+
+tr[bgcolor="#FFFFFF"] img + span {
+    vertical-align: middle !important;
+    font-weight: 400 !important;
+    color: #000000 !important;
+}
+
+/* Nested entries (fan options) */
+table[style*="border-top:5px solid #faebd2"] {
+    margin: 10px 0 !important;
+    border-top: 2px solid #000000 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Horizontal separators */
+hr.gpnf-nested-entries-hr {
+    height: 1px !important;
+    background-color: #cccccc !important;
+    border: none !important;
+    visibility: visible !important;
+    margin: 15px 0 !important;
+}
+
+/* Bulleted lists */
+ul.bulleted {
+    margin: 0 !important;
+    padding-left: 20px !important;
+    list-style-type: disc !important;
+}
+
+ul.bulleted li {
+    margin-bottom: 5px !important;
+    color: #000000 !important;
+    font-weight: 400 !important;
+}
+
+/* Links */
+a {
+    color: #000000 !important;
+    text-decoration: underline !important;
+    font-weight: 400 !important;
+}
+
+a:hover {
+    color: #000000 !important;
+    text-decoration: underline !important;
+}
+
+/* Map It link styling */
+a.map-it-link {
+    display: inline-block !important;
+    margin-top: 8px !important;
+    padding: 6px 12px !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border: 2px solid #000000 !important;
+    border-radius: 0 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    text-decoration: none !important;
+}
+
+a.map-it-link:hover {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+
+/* Email addresses */
+tr[bgcolor="#FFFFFF"] a[href^="mailto:"] {
+    font-weight: 400 !important;
+    padding: 0 !important;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    color: #000000 !important;
+    text-decoration: underline !important;
+}
+
+/* Nested fan options styling */
+table table {
+    margin: 10px 0 !important;
+}
+
+/* Improve spacing between sections */
+tr + tr {
+    border-top: none !important;
+}
+
+/* Last row in each table */
+tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+/* Mobile responsive */
+@media only screen and (max-width: 600px) {
+    table {
+        width: 100% !important;
+    }
+    
+    tr[bgcolor="#FFFFFF"] img {
+        max-width: 80px !important;
+        display: block !important;
+        margin: 0 0 8px 0 !important;
+    }
+    
+    tr[bgcolor="#EAF2FA"] td,
+    tr[bgcolor="#FAF4EA"] td,
+    tr[bgcolor="#FFFFFF"] td {
+        padding: 10px 12px !important;
+        font-size: 13px !important;
+    }
+    
+    ul.bulleted {
+        padding-left: 15px !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    body {
+        background-color: #ffffff;
+    }
+    
+    table[bgcolor="#FFFFFF"] {
+        border: 2px solid #000000 !important;
+    }
+    
+    tr[bgcolor="#EAF2FA"],
+    tr[bgcolor="#FAF4EA"] {
+        border-bottom: 2px solid #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}
+
+/* Better spacing for nested tables */
+table table[bgcolor="#FFFFFF"] {
+    margin: 8px 0 !important;
+}
+
+/* Quantity and simple text fields */
+tr[bgcolor="#FFFFFF"] td font {
+    font-size: 14px !important;
+    color: #000000 !important;
+    font-weight: 400 !important;
+}
+
+/* Special styling for first-level vs nested sections */
+body > table table table[style*="border-top"] {
+    border: 1px solid #000000 !important;
+}
+

@@ -395,29 +395,34 @@ function gp_child_enqueue_ajax_add_to_cart() {
 		});
 	}
 
-	function openMiniCartDrawerFallback() {
-		var carts = document.querySelectorAll('.wc-block-mini-cart');
-		var cart = null;
-		for (var i = 0; i < carts.length; i++) {
-			var candidateBtn = carts[i].querySelector('.wc-block-mini-cart__button');
-			if (candidateBtn && candidateBtn.offsetParent !== null) {
-				cart = carts[i];
-				break;
+	function visibleMiniCartButton() {
+		var buttons = document.querySelectorAll('.wc-block-mini-cart__button');
+		for (var i = 0; i < buttons.length; i++) {
+			if (buttons[i].offsetParent !== null) {
+				return buttons[i];
 			}
 		}
-		if (!cart) {
-			cart = carts[0] || null;
+		return buttons[0] || null;
+	}
+
+	function openHeaderMiniCart() {
+		ensureOpenDrawerBehaviour();
+		document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
+		document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
+		var btn = visibleMiniCartButton();
+		if (btn) {
+			// Same page session — this is the path that already works when clicked by hand.
+			btn.click();
 		}
-		if (!cart) {
-			return;
-		}
-		var overlay = cart.querySelector('.wc-block-components-drawer__screen-overlay');
-		if (!overlay) {
-			return;
-		}
-		cart.dataset.isInitiallyOpen = 'true';
-		overlay.classList.add('wc-block-components-drawer__screen-overlay--with-slide-in');
-		overlay.classList.remove('wc-block-components-drawer__screen-overlay--is-hidden');
+	}
+
+	function getCartItemsCount() {
+		return fetch('/wp-json/wc/store/v1/cart', {
+			credentials: 'same-origin',
+			headers: { 'Accept': 'application/json' }
+		}).then(function (r) { return r.json(); }).then(function (cart) {
+			return cart && typeof cart.items_count !== 'undefined' ? cart.items_count : 0;
+		}).catch(function () { return 0; });
 	}
 
 	ensureOpenDrawerBehaviour();
@@ -426,12 +431,9 @@ function gp_child_enqueue_ajax_add_to_cart() {
 		var $form = $(this);
 		var submitter = e.originalEvent && e.originalEvent.submitter ? e.originalEvent.submitter : null;
 
-		// Don't hijack quote / other buttons inside the form.
 		if (submitter && !$(submitter).hasClass('single_add_to_cart_button')) {
 			return;
 		}
-
-		// External products should navigate away.
 		if ($form.closest('.product-type-external').length) {
 			return;
 		}
@@ -441,62 +443,65 @@ function gp_child_enqueue_ajax_add_to_cart() {
 			return;
 		}
 
+		// Variable products must have a variation selected.
+		var $variationId = $form.find('input.variation_id, input[name="variation_id"]');
+		if ($variationId.length && !parseInt($variationId.val(), 10)) {
+			return;
+		}
+
 		e.preventDefault();
 		ensureOpenDrawerBehaviour();
 
-		var productId = $form.find('[name="add-to-cart"]').val() || $button.val();
-		var data = $form.serialize();
-		if (data.indexOf('product_id=') === -1 && productId) {
-			data += '&product_id=' + encodeURIComponent(productId);
-		}
-		if (data.indexOf('add-to-cart=') === -1 && productId) {
-			data += '&add-to-cart=' + encodeURIComponent(productId);
-		}
-
-		var ajaxUrl = (typeof wc_add_to_cart_params !== 'undefined')
-			? wc_add_to_cart_params.wc_ajax_url.toString().replace('%%endpoint%%', 'add_to_cart')
-			: '/?wc-ajax=add_to_cart';
+		// Strip old notices so we don't keep the "choose options" flash from failed attempts.
+		$('.woocommerce-notices-wrapper .woocommerce-error, .woocommerce-notices-wrapper .woocommerce-message, .woocommerce-error, .woocommerce-message').filter(function () {
+			return /choose product options|added to your cart/i.test($(this).text());
+		}).remove();
 
 		$button.removeClass('added').addClass('loading');
 
+		var beforeCountPromise = getCartItemsCount();
+		var postUrl = ($form.attr('action') && $form.attr('action').length) ? $form.attr('action') : window.location.href;
+
 		$.ajax({
 			type: 'POST',
-			url: ajaxUrl,
-			data: data,
-			dataType: 'json',
-			success: function (response) {
+			url: postUrl,
+			data: $form.serialize(),
+			success: function (html) {
 				$button.removeClass('loading');
 
-				if (!response) {
-					return;
-				}
+				var $response = $('<div>').append($.parseHTML(html, document, true));
+				var $errors = $response.find('.woocommerce-error li, .woocommerce-error').first();
 
-				// Validation / variation errors — fall back to normal POST.
-				if (response.error && response.product_url) {
-					window.location = response.product_url;
-					return;
-				}
-
-				if (response.fragments) {
-					$.each(response.fragments, function (key, value) {
-						$(key).replaceWith(value);
-					});
-				}
-
-				$button.addClass('added');
-
-				// Tell Woo Blocks the cart changed — with open_drawer this opens the mini-cart.
-				document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
-				$(document.body).trigger('added_to_cart', [response.fragments, response.cart_hash, $button]);
-				document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
-
-				// Fallback if the event listener did not open (attribute timing).
-				setTimeout(function () {
-					var open = document.querySelector('.wc-block-components-drawer__screen-overlay--with-slide-in:not(.wc-block-components-drawer__screen-overlay--is-hidden)');
-					if (!open) {
-						openMiniCartDrawerFallback();
+				if ($response.find('.woocommerce-error').length) {
+					var $target = $('.woocommerce-notices-wrapper').first();
+					if (!$target.length) {
+						$target = $form.closest('.summary, .product').first();
 					}
-				}, 400);
+					$target.prepend($response.find('.woocommerce-error').first());
+					return;
+				}
+
+				beforeCountPromise.then(function (beforeCount) {
+					return getCartItemsCount().then(function (afterCount) {
+						return { beforeCount: beforeCount, afterCount: afterCount };
+					});
+				}).then(function (counts) {
+					var added = counts.afterCount > counts.beforeCount;
+					var successNotice = $response.find('.woocommerce-message').filter(function () {
+						return /added to your cart/i.test($(this).text());
+					}).length > 0;
+
+					if (!added && !successNotice) {
+						// Unknown result — fall back to normal submit.
+						$form.off('submit');
+						$form.get(0).submit();
+						return;
+					}
+
+					$button.addClass('added');
+					$(document.body).trigger('added_to_cart', [null, null, $button]);
+					setTimeout(openHeaderMiniCart, 200);
+				});
 			},
 			error: function () {
 				$button.removeClass('loading');

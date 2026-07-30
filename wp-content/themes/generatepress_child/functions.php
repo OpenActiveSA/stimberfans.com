@@ -354,12 +354,13 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
 
 /**
  * ---------------------------------------------------------------------------
- * After add-to-cart: keep the notice, but make "View cart" open the mini-cart
- * drawer instead of going to the cart page. (Auto-opening the drawer on reload
- * was blanking out under WP Rocket page cache.)
+ * Mini-cart note:
+ * Programmatically opening the WooCommerce Blocks mini-cart drawer (from the
+ * "View cart" notice) only shows an empty overlay on this site. Header icon
+ * clicks work. Leave the notice's View cart link as the normal /cart/ page.
  * ---------------------------------------------------------------------------
  */
-// Clear any leftover auto-open cookie from the earlier approach.
+// Clear any leftover auto-open cookie from earlier experiments.
 add_action( 'init', 'gp_child_clear_legacy_open_mini_cart_cookie', 1 );
 function gp_child_clear_legacy_open_mini_cart_cookie() {
 	if ( empty( $_COOKIE['gp_open_mini_cart'] ) || headers_sent() ) {
@@ -367,65 +368,6 @@ function gp_child_clear_legacy_open_mini_cart_cookie() {
 	}
 	wc_setcookie( 'gp_open_mini_cart', '', time() - YEAR_IN_SECONDS );
 	unset( $_COOKIE['gp_open_mini_cart'] );
-}
-
-add_action( 'wp_enqueue_scripts', 'gp_child_enqueue_open_mini_cart_script', 20 );
-function gp_child_enqueue_open_mini_cart_script() {
-	if ( is_admin() || ! function_exists( 'WC' ) ) {
-		return;
-	}
-
-	$js = <<<'JS'
-(function ($) {
-	function findVisibleMiniCart() {
-		var carts = document.querySelectorAll('.wc-block-mini-cart');
-		for (var i = 0; i < carts.length; i++) {
-			var btn = carts[i].querySelector('.wc-block-mini-cart__button');
-			if (btn && btn.offsetParent !== null) {
-				return carts[i];
-			}
-		}
-		return carts[0] || null;
-	}
-
-	/**
-	 * Open the drawer the same way WooCommerce mini-cart-frontend.js does.
-	 * A bare button.click() only shows the empty overlay.
-	 */
-	function openMiniCart() {
-		var cart = findVisibleMiniCart();
-		if (!cart) {
-			return;
-		}
-		var overlay = cart.querySelector('.wc-block-components-drawer__screen-overlay');
-		if (!overlay) {
-			return;
-		}
-
-		// Lazy-load mini-cart contents packages (WC listens for this on first open).
-		document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
-
-		cart.dataset.isInitiallyOpen = 'true';
-		overlay.classList.add('wc-block-components-drawer__screen-overlay--with-slide-in');
-		overlay.classList.remove('wc-block-components-drawer__screen-overlay--is-hidden');
-	}
-
-	// Notice "View cart" → open drawer instead of /cart/.
-	$(document).on('click', '.woocommerce-message a.button.wc-forward, .woocommerce-message a.wc-forward', function (e) {
-		e.preventDefault();
-		e.stopPropagation();
-		$(this).closest('.woocommerce-message').remove();
-		openMiniCart();
-	});
-
-	// AJAX add-to-cart (archives etc.): open drawer when WC fires the event.
-	$(document.body).on('added_to_cart', function () {
-		setTimeout(openMiniCart, 300);
-	});
-})(jQuery);
-JS;
-
-	wp_add_inline_script( 'jquery', $js, 'after' );
 }
 
 /**

@@ -354,6 +354,87 @@ if ( defined( 'MAINTENANCE_MODE' ) && MAINTENANCE_MODE === true ) {
 
 /**
  * ---------------------------------------------------------------------------
+ * After add-to-cart: open WooCommerce Blocks mini-cart instead of the notice.
+ * ---------------------------------------------------------------------------
+ */
+add_filter( 'wc_add_to_cart_message_html', 'gp_child_suppress_added_to_cart_message', 10, 2 );
+function gp_child_suppress_added_to_cart_message( $message, $products ) {
+	if ( function_exists( 'WC' ) && WC()->session ) {
+		WC()->session->set( 'gp_open_mini_cart', 1 );
+	}
+	return '';
+}
+
+add_filter( 'body_class', 'gp_child_open_mini_cart_body_class' );
+function gp_child_open_mini_cart_body_class( $classes ) {
+	if ( function_exists( 'WC' ) && WC()->session && WC()->session->get( 'gp_open_mini_cart' ) ) {
+		$classes[] = 'gp-open-mini-cart';
+		WC()->session->set( 'gp_open_mini_cart', null );
+	}
+	return $classes;
+}
+
+add_action( 'wp_enqueue_scripts', 'gp_child_enqueue_open_mini_cart_script', 20 );
+function gp_child_enqueue_open_mini_cart_script() {
+	if ( is_admin() || ! function_exists( 'is_woocommerce' ) ) {
+		return;
+	}
+
+	$js = <<<'JS'
+(function ($) {
+	function isMiniCartOpen() {
+		var drawer = document.querySelector(
+			'.wc-block-mini-cart__drawer, .wc-block-components-drawer__screen-overlay--with-slide-in, [class*="wc-block-mini-cart"][aria-hidden="false"]'
+		);
+		if (drawer && drawer.getAttribute('aria-hidden') === 'false') {
+			return true;
+		}
+		return !!document.querySelector('.wc-block-components-drawer__screen-overlay--with-slide-in:not(.wc-block-components-drawer__screen-overlay--is-hidden)');
+	}
+
+	function openMiniCart(attempt) {
+		attempt = attempt || 0;
+		if (isMiniCartOpen()) {
+			return;
+		}
+		var btn = document.querySelector('.wc-block-mini-cart__button');
+		if (btn) {
+			btn.click();
+			document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
+			return;
+		}
+		if (attempt < 20) {
+			setTimeout(function () {
+				openMiniCart(attempt + 1);
+			}, 150);
+		}
+	}
+
+	function removeAddedToCartNotices() {
+		$('.woocommerce-message').filter(function () {
+			return /added to (your|the) cart/i.test($(this).text());
+		}).remove();
+	}
+
+	$(document.body).on('added_to_cart', function () {
+		removeAddedToCartNotices();
+		setTimeout(openMiniCart, 50);
+	});
+
+	$(function () {
+		removeAddedToCartNotices();
+		if (document.body.classList.contains('gp-open-mini-cart')) {
+			setTimeout(openMiniCart, 250);
+		}
+	});
+})(jQuery);
+JS;
+
+	wp_add_inline_script( 'jquery', $js, 'after' );
+}
+
+/**
+ * ---------------------------------------------------------------------------
  * Front-end performance: dequeue assets that are not needed on the current page.
  *
  * Keeps WooCommerce Blocks mini-cart (header cart) everywhere.

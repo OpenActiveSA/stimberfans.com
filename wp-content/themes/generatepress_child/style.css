@@ -539,6 +539,11 @@ li.product:hover .wc-product-image img {
     border-radius: var(--radius-size);
 }
 
+/* Hide "added to cart" flash — mini-cart opens instead (see functions.php). */
+body.gp-open-mini-cart .woocommerce-message {
+    display: none !important;
+}
+
 .woocommerce ul.products li.product a img {
     background-color: #f0eeed;
 }

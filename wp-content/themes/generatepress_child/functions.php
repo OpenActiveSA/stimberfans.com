@@ -395,27 +395,6 @@ function gp_child_enqueue_ajax_add_to_cart() {
 		});
 	}
 
-	function visibleMiniCartButton() {
-		var buttons = document.querySelectorAll('.wc-block-mini-cart__button');
-		for (var i = 0; i < buttons.length; i++) {
-			if (buttons[i].offsetParent !== null) {
-				return buttons[i];
-			}
-		}
-		return buttons[0] || null;
-	}
-
-	function openHeaderMiniCart() {
-		ensureOpenDrawerBehaviour();
-		document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
-		document.body.dispatchEvent(new CustomEvent('wc-blocks_added_to_cart', { bubbles: true }));
-		var btn = visibleMiniCartButton();
-		if (btn) {
-			// Same page session — this is the path that already works when clicked by hand.
-			btn.click();
-		}
-	}
-
 	function getCartItemsCount() {
 		return fetch('/wp-json/wc/store/v1/cart', {
 			credentials: 'same-origin',
@@ -452,7 +431,7 @@ function gp_child_enqueue_ajax_add_to_cart() {
 		e.preventDefault();
 		ensureOpenDrawerBehaviour();
 
-		// Strip old notices so we don't keep the "choose options" flash from failed attempts.
+		// Strip old notices from earlier failed attempts.
 		$('.woocommerce-notices-wrapper .woocommerce-error, .woocommerce-notices-wrapper .woocommerce-message, .woocommerce-error, .woocommerce-message').filter(function () {
 			return /choose product options|added to your cart/i.test($(this).text());
 		}).remove();
@@ -470,7 +449,6 @@ function gp_child_enqueue_ajax_add_to_cart() {
 				$button.removeClass('loading');
 
 				var $response = $('<div>').append($.parseHTML(html, document, true));
-				var $errors = $response.find('.woocommerce-error li, .woocommerce-error').first();
 
 				if ($response.find('.woocommerce-error').length) {
 					var $target = $('.woocommerce-notices-wrapper').first();
@@ -492,15 +470,18 @@ function gp_child_enqueue_ajax_add_to_cart() {
 					}).length > 0;
 
 					if (!added && !successNotice) {
-						// Unknown result — fall back to normal submit.
 						$form.off('submit');
 						$form.get(0).submit();
 						return;
 					}
 
 					$button.addClass('added');
+
+					// One open only: Woo mini-cart listens for this and opens the real drawer
+					// when data-add-to-cart-behaviour="open_drawer". Do NOT also btn.click()
+					// — that opens a second empty overlay (there are two mini-cart instances).
+					document.body.dispatchEvent(new CustomEvent('wc-blocks_adding_to_cart', { bubbles: true }));
 					$(document.body).trigger('added_to_cart', [null, null, $button]);
-					setTimeout(openHeaderMiniCart, 200);
 				});
 			},
 			error: function () {

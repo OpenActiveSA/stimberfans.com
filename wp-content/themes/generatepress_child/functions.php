@@ -792,14 +792,28 @@ function gp_child_print_delayed_widget_loader() {
 		}
 		next(0);
 	}
-	['scroll', 'mousemove', 'touchstart', 'keydown'].forEach(function (evt) {
+
+	// Do not use mousemove/keydown — those fire immediately and hide the benefit.
+	['scroll', 'touchstart'].forEach(function (evt) {
 		window.addEventListener(evt, activateDelayedWidgets, { once: true, passive: true });
 	});
-	if ('requestIdleCallback' in window) {
-		requestIdleCallback(activateDelayedWidgets, { timeout: 4000 });
-	} else {
-		setTimeout(activateDelayedWidgets, 4000);
+
+	// Load when Instagram block nears the viewport (home), otherwise wait for scroll/fallback.
+	var feed = document.getElementById('sb_instagram');
+	if (feed && 'IntersectionObserver' in window) {
+		var io = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (entry.isIntersecting) {
+					activateDelayedWidgets();
+					io.disconnect();
+				}
+			});
+		}, { rootMargin: '200px 0px' });
+		io.observe(feed);
 	}
+
+	// Long fallback so first paint / Lighthouse stay clear of these widgets.
+	setTimeout(activateDelayedWidgets, 10000);
 })();
 </script>
 	<?php

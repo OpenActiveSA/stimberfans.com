@@ -701,3 +701,107 @@ function gp_child_dequeue_by_src_contains( $needles ) {
 	}
 }
 
+/**
+ * ---------------------------------------------------------------------------
+ * Delay Instagram Feed + WhatsApp widget assets until first interaction or idle.
+ * Keeps markup in place; CSS/JS load after scroll/touch/mouse or ~4s fallback.
+ * ---------------------------------------------------------------------------
+ */
+function gp_child_delay_widget_script_handles() {
+	return array( 'sbi_scripts', 'nta-wa-libs', 'nta-js-global', 'nta-js-popup' );
+}
+
+function gp_child_delay_widget_style_handles() {
+	return array( 'sbi_styles', 'nta-css-popup' );
+}
+
+add_filter( 'script_loader_tag', 'gp_child_delay_widget_script_tag', 20, 3 );
+function gp_child_delay_widget_script_tag( $tag, $handle, $src ) {
+	if ( is_admin() || ! in_array( $handle, gp_child_delay_widget_script_handles(), true ) ) {
+		return $tag;
+	}
+
+	// Force browsers to ignore until our loader rewrites type back to JS.
+	$tag = preg_replace( '/\s+type=(["\'])[^"\']*\1/', '', $tag, 1 );
+	$tag = preg_replace( '/<script\b/', '<script type="text/plain" data-gp-delay="1"', $tag, 1 );
+	return $tag;
+}
+
+add_filter( 'wp_inline_script_attributes', 'gp_child_delay_widget_inline_attrs', 20, 2 );
+function gp_child_delay_widget_inline_attrs( $attributes, $data ) {
+	if ( is_admin() || empty( $attributes['id'] ) || ! is_string( $attributes['id'] ) ) {
+		return $attributes;
+	}
+
+	foreach ( gp_child_delay_widget_script_handles() as $handle ) {
+		if ( $attributes['id'] === $handle . '-js-extra' ) {
+			$attributes['type']          = 'text/plain';
+			$attributes['data-gp-delay'] = '1';
+			break;
+		}
+	}
+
+	return $attributes;
+}
+
+add_filter( 'style_loader_tag', 'gp_child_delay_widget_style_tag', 20, 2 );
+function gp_child_delay_widget_style_tag( $html, $handle ) {
+	if ( is_admin() || ! in_array( $handle, gp_child_delay_widget_style_handles(), true ) ) {
+		return $html;
+	}
+
+	$html = str_replace( "media='all'", "media='print' data-gp-delay-style='1'", $html );
+	$html = str_replace( 'media="all"', 'media="print" data-gp-delay-style="1"', $html );
+	return $html;
+}
+
+add_action( 'wp_footer', 'gp_child_print_delayed_widget_loader', 99 );
+function gp_child_print_delayed_widget_loader() {
+	if ( is_admin() ) {
+		return;
+	}
+	?>
+<script data-no-minify="1">
+(function () {
+	var done = false;
+	function activateDelayedWidgets() {
+		if (done) return;
+		done = true;
+		document.querySelectorAll('link[data-gp-delay-style]').forEach(function (link) {
+			link.media = 'all';
+		});
+		var nodes = Array.prototype.slice.call(document.querySelectorAll('script[data-gp-delay="1"]'));
+		function next(i) {
+			if (i >= nodes.length) return;
+			var old = nodes[i];
+			var neu = document.createElement('script');
+			Array.prototype.forEach.call(old.attributes, function (attr) {
+				if (attr.name === 'type' || attr.name === 'data-gp-delay') return;
+				neu.setAttribute(attr.name, attr.value);
+			});
+			if (!old.getAttribute('src')) {
+				neu.text = old.textContent;
+				old.parentNode.insertBefore(neu, old);
+				old.parentNode.removeChild(old);
+				next(i + 1);
+				return;
+			}
+			neu.onload = neu.onerror = function () { next(i + 1); };
+			old.parentNode.insertBefore(neu, old);
+			old.parentNode.removeChild(old);
+		}
+		next(0);
+	}
+	['scroll', 'mousemove', 'touchstart', 'keydown'].forEach(function (evt) {
+		window.addEventListener(evt, activateDelayedWidgets, { once: true, passive: true });
+	});
+	if ('requestIdleCallback' in window) {
+		requestIdleCallback(activateDelayedWidgets, { timeout: 4000 });
+	} else {
+		setTimeout(activateDelayedWidgets, 4000);
+	}
+})();
+</script>
+	<?php
+}
+

@@ -106,6 +106,11 @@ class OA_TFP_Shortcodes {
             $output .= '<path d="M15 18l-6-6 6-6"/>';
             $output .= '</svg></button>';
         }
+
+        // Viewport clips; the inner track is what we translate.
+        if ($has_scroll) {
+            $output .= '<div class="oa-tfp-gallery-viewport">';
+        }
         
         $output .= '<div class="oa-tfp-product-gallery' . ($has_scroll ? ' oa-tfp-gallery-scroller' : '') . '">';
         foreach ($secondary_gallery_ids as $image_id) {
@@ -120,6 +125,10 @@ class OA_TFP_Shortcodes {
             }
         }
         $output .= '</div>';
+
+        if ($has_scroll) {
+            $output .= '</div>'; // .oa-tfp-gallery-viewport
+        }
         
         if ($has_scroll) {
             $output .= '<button class="oa-tfp-gallery-nav oa-tfp-gallery-next" type="button" aria-label="Next images">';
@@ -135,6 +144,7 @@ class OA_TFP_Shortcodes {
             $output .= '<script>
             (function() {
                 var gallery = document.querySelector(".oa-tfp-product-gallery.oa-tfp-gallery-scroller");
+                var viewport = document.querySelector(".oa-tfp-gallery-viewport");
                 var prevBtn = document.querySelector(".oa-tfp-gallery-prev");
                 var nextBtn = document.querySelector(".oa-tfp-gallery-next");
                 if (!gallery || !prevBtn || !nextBtn) return;
@@ -147,12 +157,19 @@ class OA_TFP_Shortcodes {
                 
                 function getItemWidth() {
                     if (items.length === 0) return 0;
-                    var galleryWidth = gallery.offsetWidth;
+                    // Measure the visible viewport, not the transformed track.
+                    var widthSource = viewport || gallery.parentElement || gallery;
+                    var galleryWidth = widthSource.clientWidth;
                     return (galleryWidth - (gap * (visibleCount - 1))) / visibleCount;
                 }
                 
                 function getScrollDistance() {
                     return getItemWidth() + gap;
+                }
+
+                function applyTransform() {
+                    var scrollDistance = currentIndex * getScrollDistance();
+                    gallery.style.transform = "translateX(-" + scrollDistance + "px)";
                 }
                 
                 function updateButtons() {
@@ -168,8 +185,7 @@ class OA_TFP_Shortcodes {
                     } else if (direction === "next" && currentIndex < maxIndex) {
                         currentIndex++;
                     }
-                    var scrollDistance = currentIndex * getScrollDistance();
-                    gallery.style.transform = "translateX(-" + scrollDistance + "px)";
+                    applyTransform();
                     updateButtons();
                 }
                 
@@ -183,16 +199,15 @@ class OA_TFP_Shortcodes {
                     resizeTimer = setTimeout(function() {
                         maxIndex = Math.max(0, items.length - visibleCount);
                         currentIndex = Math.min(currentIndex, maxIndex);
-                        var scrollDistance = currentIndex * getScrollDistance();
-                        gallery.style.transform = "translateX(-" + scrollDistance + "px)";
+                        applyTransform();
                         updateButtons();
                     }, 250);
                 });
                 
-                // Initialize on load
-                setTimeout(function() {
-                    updateButtons();
-                }, 100);
+                // Start at the first slide (clears any stale inline transform).
+                currentIndex = 0;
+                applyTransform();
+                updateButtons();
             })();
             </script>';
         }

@@ -300,6 +300,12 @@
     padding: 0 50px;
 }
 
+/* Clip here — NOT on the transformed track (that caused blank space). */
+.oa-tfp-gallery-viewport {
+    width: 100%;
+    overflow: hidden;
+}
+
 .oa-tfp-product-gallery {
     display: flex;
     flex-wrap: wrap;
@@ -309,8 +315,10 @@
 
 .oa-tfp-product-gallery.oa-tfp-gallery-scroller {
     flex-wrap: nowrap;
-    overflow: hidden;
+    overflow: visible;
+    width: 100%;
     transition: transform 0.3s ease;
+    will-change: transform;
 }
 
 .oa-tfp-product-gallery-item {
